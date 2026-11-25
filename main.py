@@ -68,22 +68,82 @@ HAND COUNT (final line, 125 characters):
   + space = 1 -> 81
   S3 "Even my bank knows that's not normal for me." = 44 -> 125
   Cross-check: 103 non-space characters + 22 spaces = 125.
+
+Pass 3 — code-craft revision (the joke itself is frozen; only the
+program around it changes):
+
+The first version stored the line as one pre-joined string and trusted
+the hand count above on faith. That is fragile: anyone editing the
+string later could silently break the 1-280 gate or the count. So this
+pass makes the program prove its own claims instead:
+
+  * The line is now built from its three sentences, joined with single
+    spaces — the same three beats the hand count breaks down, so the
+    code structure mirrors the joke's structure.
+  * A length check runs before anything is written: the line must sit
+    inside the bounty's 1-280 window and match the counted 125 exactly.
+    A future typo then fails loudly at run time instead of quietly
+    submitting a different line than the one that was judged.
+  * Writing is split into its own small function so main() reads as
+    intent (validate, then write) rather than plumbing.
 """
 
 import os
 
-ENTRY = (
-    "My bank sent me a fraud alert for unusual activity. "
-    "It was me buying vegetables. "
-    "Even my bank knows that's not normal for me."
+# The entry, kept as its three beats (setup / reveal / verdict) and
+# joined with single spaces. This is exactly the breakdown the hand
+# count in the docstring verifies: 51 + 1 + 28 + 1 + 44 = 125 chars.
+SENTENCES = (
+    "My bank sent me a fraud alert for unusual activity.",
+    "It was me buying vegetables.",
+    "Even my bank knows that's not normal for me.",
 )
+
+ENTRY = " ".join(SENTENCES)
+
+# The bounty's gate: one line, 1-280 characters. EXPECTED_LENGTH is the
+# hand-counted length of the frozen entry above; if the two ever
+# disagree, the file was edited without updating the count, and the
+# program should refuse to write rather than submit an unjudged line.
+MIN_LENGTH = 1
+MAX_LENGTH = 280
+EXPECTED_LENGTH = 125
+
+
+def validate_entry(line: str) -> None:
+    """Raise ValueError if `line` is not the verified entry."""
+    if "\n" in line:
+        raise ValueError("entry must be a single line")
+    if not MIN_LENGTH <= len(line) <= MAX_LENGTH:
+        raise ValueError(
+            f"entry is {len(line)} characters, outside the "
+            f"{MIN_LENGTH}-{MAX_LENGTH} gate"
+        )
+    if len(line) != EXPECTED_LENGTH:
+        raise ValueError(
+            f"entry is {len(line)} characters, expected "
+            f"{EXPECTED_LENGTH} — the line no longer matches the "
+            "hand count in the module docstring"
+        )
+
+
+def write_entry(line: str, out_dir: str) -> str:
+    """Write `line` to <out_dir>/entry.txt and return the path.
+
+    No trailing newline is added: the file must contain exactly the
+    judged line, byte for byte.
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, "entry.txt")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(line)
+    return path
 
 
 def main() -> None:
+    validate_entry(ENTRY)
     out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
-    os.makedirs(out_dir, exist_ok=True)
-    with open(os.path.join(out_dir, "entry.txt"), "w", encoding="utf-8") as f:
-        f.write(ENTRY)
+    write_entry(ENTRY, out_dir)
 
 
 if __name__ == "__main__":
